@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kto? - Quiz na dwóch urządzeniach</title>
+    <!-- Firebase SDK - module version -->
+    <script type="importmap">
+        {
+            "imports": {
+                "firebase/app": "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js",
+                "firebase/database": "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js"
+            }
+        }
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 100px;
+            color: #667eea;
+            margin-bottom: 20px;
+            text-shadow: 5px 5px 0 #764ba2;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 24px;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.3s, box-shadow 0.3s;
+            margin: 10px;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.5);
+        }
+
+        .room-section {
+            margin: 30px 0;
+        }
+
+        .room-input {
+            padding: 15px;
+            font-size: 18px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            width: 200px;
+            margin-right: 10px;
+        }
+
+        .player-panel {
+            display: none;
+        }
+
+        .question {
+            font-size: 28px;
+            margin: 30px 0;
+            color: #333;
+            font-weight: bold;
+        }
+
+        .options {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 30px 0;
+        }
+
+        .option-btn {
+            background: #f0f0f0;
+            border: 4px solid #ddd;
+            padding: 40px;
+            font-size: 64px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .option-btn:hover {
+            border-color: #667eea;
+            background: #e0e7ff;
+            transform: scale(1.1);
+        }
+
+        .option-btn.selected {
+            border-color: #667eea;
+            background: #e0e7ff;
+        }
+
+        .waiting-screen {
+            padding: 40px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            margin: 20px 0;
+        }
+
+        .waiting-animation {
+            font-size: 48px;
+            margin: 20px 0;
+        }
+
+        .compatibility {
+            font-size: 72px;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .code-display {
+            font-size: 48px;
+            font-weight: bold;
+            color: #667eea;
+            background: #f0f0f0;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            letter-spacing: 10px;
+        }
+
+        .player-badge {
+            font-size: 24px;
+            padding: 10px 20px;
+            border-radius: 10px;
+            background: #667eea;
+            color: white;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .database-error {
+            color: #f44336;
+            background: #ffebee;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Ekran startowy -->
+        <div id="startScreen">
+            <h1>Kto?</h1>
+            <div class="room-section">
+                <h2 style="margin-bottom: 30px; color: #333;">Quiz dla pary na dwóch urządzeniach</h2>
+                <button class="btn" id="createRoomBtn">Stwórz nowy pokój</button>
+                <p style="margin: 20px 0; color: #666;">lub</p>
+                <input type="text" id="roomCodeInput" class="room-input" placeholder="Kod pokoju" maxlength="6">
+                <button class="btn" id="joinRoomBtn">Dołącz</button>
+            </div>
+            <div id="errorMessage" style="color: #f44336; margin-top: 20px;"></div>
+        </div>
+
+        <!-- Ekran oczekiwania -->
+        <div id="waitingScreen" class="player-panel">
+            <div class="player-badge" id="playerBadge">Gracz 1</div>
+            <div class="waiting-screen">
+                <h2 style="margin-bottom: 20px;">Twój kod pokoju:</h2>
+                <div id="roomCode" class="code-display">123456</div>
+                <div class="waiting-animation">⏳</div>
+                <p style="font-size: 20px; color: #666;">Oczekiwanie na drugiego gracza...</p>
+                <div class="loader"></div>
+                <button class="btn" id="cancelRoomBtn" style="margin-top: 30px; background: #f44336;">Anuluj</button>
+            </div>
+        </div>
+
+        <!-- Ekran gry -->
+        <div id="gameScreen" class="player-panel">
+            <div class="player-badge" id="gamePlayerBadge">Gracz 1</div>
+            <div id="gameContent"></div>
+        </div>
+
+        <!-- Ekran wyniku końcowego -->
+        <div id="finalResultScreen" class="player-panel">
+            <div id="finalResultContent"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+        import { getDatabase, ref, set, update, onValue, once, remove, get } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
+
+        // TWOJA konfiguracja Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyCbHpYsa13fpd_jypAB72otY0qYZDlUrk4",
+            authDomain: "kto-quiz-404d9.firebaseapp.com",
+            projectId: "kto-quiz-404d9",
+            storageBucket: "kto-quiz-404d9.firebasestorage.app",
+            messagingSenderId: "472146697418",
+            appId: "1:472146697418:web:3fcab7cdd39fd111f06833"
+        };
+
+        // Inicjalizacja Firebase
+        let app;
+        let database;
+        
+        try {
+            app = initializeApp(firebaseConfig);
+            database = getDatabase(app);
+            console.log("Firebase zainicjalizowany pomyślnie!");
+        } catch (error) {
+            console.error("Błąd inicjalizacji Firebase:", error);
+            document.getElementById('errorMessage').innerHTML = '❌ Błąd połączenia z Firebase. Sprawdź konfigurację.';
+        }
+
+        // Pytania
+        const questions = [
+            "Kto częściej sprząta?",
+            "Kto częściej narzeka?",
+            "Kto dłużej śpi?",
+            "Kto jest bardziej cierpliwy?",
+            "Kto częściej się spóźnia?",
+            "Kto lepiej gotuje?",
+            "Kto częściej zapomina o ważnych rzeczach?",
+            "Kto jest bardziej uparty?",
+            "Kto częściej planuje randki?",
+            "Kto lepiej tańczy?"
+        ];
+
+        // Zmienne globalne
+        let currentRoom = null;
+        let playerNumber = null;
+        let currentQuestionIndex = 0;
+        let hasAnswered = false;
+        let gameActive = false;
+        let unsubscribeFunctions = [];
+
+        // Funkcja do generowania kodu pokoju
+        function generateRoomCode() {
+            return Math.floor(100000 + Math.random() * 900000).toString();
+        }
+
+        // Czyszczenie nasłuchiwań
+        function clearListeners() {
+            unsubscribeFunctions.forEach(unsubscribe => {
+                if (typeof unsubscribe === 'function') {
+                    unsubscribe();
+                }
+            });
+            unsubscribeFunctions = [];
+        }
+
+        // Tworzenie nowego pokoju
+        window.createRoom = function() {
+            const roomCode = generateRoomCode();
+            currentRoom = roomCode;
+            playerNumber = 1;
+            
+            const roomRef = ref(database, `rooms/${roomCode}`);
+            
+            set(roomRef, {
+                created: Date.now(),
+                player1: {
+                    connected: true,
+                    currentAnswer: null,
+                    ready: false
+                },
+                player2: {
+                    connected: false,
+                    currentAnswer: null,
+                    ready: false
+                },
+                gameState: {
+                    currentQuestion: 0,
+                    correctAnswers: 0,
+                    status: 'waiting'
+                }
+            }).then(() => {
+                document.getElementById('startScreen').style.display = 'none';
+                document.getElementById('waitingScreen').style.display = 'block';
+                document.getElementById('roomCode').textContent = roomCode;
+                document.getElementById('playerBadge').textContent = 'Gracz 1 (Twórca)';
+                
+                listenForPlayer2(roomCode);
+            }).catch((error) => {
+                console.error("Błąd tworzenia pokoju:", error);
+                document.getElementById('errorMessage').innerHTML = '❌ Nie udało się utworzyć pokoju. Spróbuj ponownie.';
+            });
+        };
+
+        // Dołączanie do istniejącego pokoju
+        window.joinRoom = function() {
+            const roomCode = document.getElementById('roomCodeInput').value;
+            if (roomCode.length < 6) {
+                alert('Wprowadź poprawny 6-cyfrowy kod!');
+                return;
+            }
+            
+            currentRoom = roomCode;
+            playerNumber = 2;
+            
+            const roomRef = ref(database, `rooms/${roomCode}`);
+            
+            get(roomRef).then((snapshot) => {
+                const room = snapshot.val();
+                if (room && !room.player2.connected) {
+                    update(ref(database, `rooms/${roomCode}/player2`), {
+                        connected: true,
+                        currentAnswer: null,
+                        ready: true
+                    });
+                    
+                    update(ref(database, `rooms/${roomCode}/gameState`), {
+                        status: 'playing'
+                    });
+                    
+                    document.getElementById('startScreen').style.display = 'none';
+                    document.getElementById('gameScreen').style.display = 'block';
+                    document.getElementById('gamePlayerBadge').textContent = 'Gracz 2';
+                    
+                    initializeGame();
+                } else {
+                    alert('Pokój nie istnieje lub jest już zajęty!');
+                }
+            }).catch((error) => {
+                console.error("Błąd dołączania do pokoju:", error);
+                alert('Nie udało się dołączyć do pokoju. Sprawdź kod i spróbuj ponownie.');
+            });
+        };
+
+        // Nasłuchiwanie na gracza 2
+        function listenForPlayer2(roomCode) {
+            const player2Ref = ref(database, `rooms/${roomCode}/player2/connected`);
+            
+            const unsubscribe = onValue(player2Ref, (snapshot) => {
+                if (snapshot.val() === true) {
+                    document.getElementById('waitingScreen').style.display = 'none';
+                    document.getElementById('gameScreen').style.display = 'block';
+                    document.getElementById('gamePlayerBadge').textContent = 'Gracz 1 (Twórca)';
+                    
+                    initializeGame();
+                }
+            });
+            
+            unsubscribeFunctions.push(unsubscribe);
+        }
+
+        // Inicjalizacja gry
+        function initializeGame() {
+            gameActive = true;
+            currentQuestionIndex = 0;
+            hasAnswered = false;
+            
+            clearListeners();
+            listenForGameUpdates();
+            displayQuestion();
+        }
+
+        // Nasłuchiwanie na aktualizacje gry
+        function listenForGameUpdates() {
+            const roomRef = ref(database, `rooms/${currentRoom}`);
+            
+            // Nasłuchuj na zmianę pytania
+            const questionUnsubscribe = onValue(ref(database, `rooms/${currentRoom}/gameState/currentQuestion`), (snapshot) => {
+                const newQuestion = snapshot.val();
+                if (newQuestion !== null && newQuestion !== currentQuestionIndex) {
+                    currentQuestionIndex = newQuestion;
+                    hasAnswered = false;
+                    displayQuestion();
+                }
+            });
+            unsubscribeFunctions.push(questionUnsubscribe);
+            
+            // Nasłuchuj na odpowiedzi przeciwnika
+            if (playerNumber === 1) {
+                const p2AnswerUnsubscribe = onValue(ref(database, `rooms/${currentRoom}/player2/currentAnswer`), (snapshot) => {
+                    if (snapshot.val() !== null && playerNumber === 1) {
+                        checkBothAnswers();
+                    }
+                });
+                unsubscribeFunctions.push(p2AnswerUnsubscribe);
+            } else {
+                const p1AnswerUnsubscribe = onValue(ref(database, `rooms/${currentRoom}/player1/currentAnswer`), (snapshot) => {
+                    if (snapshot.val() !== null && playerNumber === 2) {
+                        checkBothAnswers();
+                    }
+                });
+                unsubscribeFunctions.push(p1AnswerUnsubscribe);
+            }
+            
+            // Nasłuchuj na zakończenie gry
+            const statusUnsubscribe = onValue(ref(database, `rooms/${currentRoom}/gameState/status`), (snapshot) => {
+                if (snapshot.val() === 'finished') {
+                    showFinalResult();
+                }
+            });
+            unsubscribeFunctions.push(statusUnsubscribe);
+        }
+
+        // Wyświetlanie pytania
+        function displayQuestion() {
+            if (currentQuestionIndex >= questions.length) {
+                endGame();
+                return;
+            }
+            
+            hasAnswered = false;
+            
+            const content = document.getElementById('gameContent');
+            content.innerHTML = `
+                <div class="question">${questions[currentQuestionIndex]}</div>
+                <p style="color: #666; margin-bottom: 10px;">Kliknij na swoją odpowiedź:</p>
+                <div class="options">
+                    <button class="option-btn" onclick="window.submitAnswer('dziewczyna')">👩</button>
+                    <button class="option-btn" onclick="window.submitAnswer('chlopak')">👨</button>
+                </div>
+                <div id="answerStatus" style="margin-top: 20px; color: #666;">
+                    ⏳ Wybierz odpowiedź...
+                </div>
+                <div class="progress">
+                    Pytanie ${currentQuestionIndex + 1} z ${questions.length}
+                </div>
+            `;
+        }
+
+        // Wysyłanie odpowiedzi
+        window.submitAnswer = function(answer) {
+            if (hasAnswered || !gameActive) return;
+            
+            hasAnswered = true;
+            
+            const buttons = document.querySelectorAll('.option-btn');
+            buttons.forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            event.target.classList.add('selected');
+            
+            const playerRef = ref(database, `rooms/${currentRoom}/player${playerNumber}`);
+            update(playerRef, {
+                currentAnswer: answer,
+                ready: true
+            });
+            
+            document.getElementById('answerStatus').innerHTML = '✅ Odpowiedź zapisana! Czekam na drugiego gracza...';
+        };
+
+        // Sprawdzanie odpowiedzi obu graczy
+        function checkBothAnswers() {
+            const roomRef = ref(database, `rooms/${currentRoom}`);
+            
+            get(roomRef).then((snapshot) => {
+                const room = snapshot.val();
+                const p1Answer = room.player1?.currentAnswer;
+                const p2Answer = room.player2?.currentAnswer;
+                
+                if (p1Answer && p2Answer) {
+                    const sameAnswer = (p1Answer === p2Answer);
+                    
+                    if (sameAnswer) {
+                        const newScore = (room.gameState.correctAnswers || 0) + 1;
+                        update(ref(database, `rooms/${currentRoom}/gameState`), {
+                            correctAnswers: newScore
+                        });
+                    }
+                    
+                    update(ref(database, `rooms/${currentRoom}/player1`), {
+                        currentAnswer: null
+                    });
+                    
+                    update(ref(database, `rooms/${currentRoom}/player2`), {
+                        currentAnswer: null
+                    });
+                    
+                    const nextQuestion = currentQuestionIndex + 1;
+                    if (nextQuestion < questions.length) {
+                        update(ref(database, `rooms/${currentRoom}/gameState`), {
+                            currentQuestion: nextQuestion
+                        });
+                    } else {
+                        endGame();
+                    }
+                }
+            });
+        }
+
+        // Zakończenie gry
+        function endGame() {
+            gameActive = false;
+            update(ref(database, `rooms/${currentRoom}/gameState`), {
+                status: 'finished'
+            });
+        }
+
+        // Wyświetlanie wyniku końcowego
+        function showFinalResult() {
+            get(ref(database, `rooms/${currentRoom}/gameState`)).then((snapshot) => {
+                const gameState = snapshot.val();
+                const correctAnswers = gameState.correctAnswers || 0;
+                const compatibility = Math.round((correctAnswers / questions.length) * 100);
+                
+                let message = '';
+                if (compatibility >= 80) message = 'Jesteście sobie przeznaczeni! ❤️';
+                else if (compatibility >= 60) message = 'Całkiem nieźle się rozumiecie! 💑';
+                else if (compatibility >= 40) message = 'Macie jeszcze trochę do poprawy 💕';
+                else message = 'Pora lepiej się poznać! 💔';
+                
+                document.getElementById('gameScreen').style.display = 'none';
+                document.getElementById('finalResultScreen').style.display = 'block';
+                
+                const content = document.getElementById('finalResultContent');
+                content.innerHTML = `
+                    <h2 style="font-size: 48px; margin-bottom: 20px; color: #333;">Wasz wynik!</h2>
+                    <div class="compatibility">${compatibility}%</div>
+                    <p style="font-size: 24px; margin-bottom: 30px; color: #666;">${message}</p>
+                    <div style="background: #f0f0f0; padding: 20px; border-radius: 15px; margin-bottom: 30px;">
+                        <p style="font-size: 20px;">Zgodnych odpowiedzi: ${correctAnswers} z ${questions.length}</p>
+                    </div>
+                    <button class="btn" onclick="window.location.reload()">Zagraj ponownie</button>
+                `;
+            });
+        }
+
+        // Anulowanie tworzenia pokoju
+        window.cancelRoom = function() {
+            if (currentRoom) {
+                remove(ref(database, `rooms/${currentRoom}`)).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                window.location.reload();
+            }
+        };
+
+        // Inicjalizacja - przypisanie event listenerów po załadowaniu strony
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('createRoomBtn').onclick = window.createRoom;
+            document.getElementById('joinRoomBtn').onclick = window.joinRoom;
+            document.getElementById('cancelRoomBtn').onclick = window.cancelRoom;
+        });
+    </script>
+</body>
+</html>
