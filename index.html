@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kto? - Quiz na dwóch urządzeniach</title>
+    <title>Kto? - Quiz dla pary</title>
     <!-- Import map for Firebase -->
     <script type="importmap">
         {
@@ -133,14 +133,6 @@
             margin: 20px 0;
         }
 
-        .result-screen {
-            display: none;
-            margin: 30px 0;
-            padding: 30px;
-            background: #f8f9fa;
-            border-radius: 15px;
-        }
-
         .compatibility {
             font-size: 72px;
             color: #4CAF50;
@@ -167,10 +159,6 @@
             color: white;
             display: inline-block;
             margin-bottom: 20px;
-        }
-
-        .hidden {
-            display: none;
         }
 
         .loader {
@@ -241,7 +229,7 @@
         import { initializeApp } from "firebase/app";
         import { getDatabase, ref, set, update, onValue, get, remove } from "firebase/database";
 
-        // 🔥 TWOJA POPRAWNA KONFIGURACJA FIREBASE 🔥
+        // 🔥 TWOJA KONFIGURACJA FIREBASE 🔥
         const firebaseConfig = {
             apiKey: "AIzaSyCbHpYsa13fpd_jypAB72otY0qYZDlUrk4",
             authDomain: "kto-quiz-404d9.firebaseapp.com",
@@ -253,29 +241,34 @@
         };
 
         // Inicjalizacja Firebase
-        let app;
-        let database;
-        
-        try {
-            app = initializeApp(firebaseConfig);
-            database = getDatabase(app);
-            console.log("✅ Firebase połączony!");
-        } catch (error) {
-            console.error("❌ Błąd Firebase:", error);
-        }
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        console.log("✅ Firebase połączony!");
 
-        // Pytania
+        // 📋 NOWE PYTANIA - 21 pytań
         const questions = [
             "Kto częściej sprząta?",
             "Kto częściej narzeka?",
-            "Kto dłużej śpi?",
-            "Kto jest bardziej cierpliwy?",
-            "Kto częściej się spóźnia?",
+            "Kto jest bardziej oszczędny?",
+            "Kto jest większym dusigroszem?",
+            "Kto więcej mówi?",
+            "Kto więcej śpi?",
+            "Kto więcej mówi o uczuciach?",
+            "Kto pierwszy powiedział «kocham cię»?",
+            "Kto pierwszy napisał?",
+            "Kto jest bardziej leniwy?",
             "Kto lepiej gotuje?",
-            "Kto częściej zapomina o ważnych rzeczach?",
-            "Kto jest bardziej uparty?",
-            "Kto częściej planuje randki?",
-            "Kto lepiej tańczy?"
+            "Kto częściej gra?",
+            "Kto częściej pierdzi?",
+            "Kto lepiej tańczy?",
+            "Kto lepiej śpiewa?",
+            "Kto jest lepiej zorganizowany?",
+            "Kto jest bardziej kreatywny?",
+            "Kto bardziej dba o rzeczy materialne?",
+            "Kto się lepiej opiekuje?",
+            "Kto bardziej lubi jeść?",
+            "Kto jest śmieszniejszy?",
+            "Kto jest bardziej poważny?"
         ];
 
         // Zmienne globalne
