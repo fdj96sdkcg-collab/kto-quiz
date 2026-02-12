@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kto? - Quiz na dwóch urządzeniach</title>
-    <!-- Firebase SDK - module version -->
+    <!-- Import map for Firebase -->
     <script type="importmap">
         {
             "imports": {
@@ -62,6 +62,11 @@
         .btn:hover {
             transform: scale(1.05);
             box-shadow: 0 10px 30px rgba(102, 126, 234, 0.5);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .room-section {
@@ -128,10 +133,19 @@
             margin: 20px 0;
         }
 
+        .result-screen {
+            display: none;
+            margin: 30px 0;
+            padding: 30px;
+            background: #f8f9fa;
+            border-radius: 15px;
+        }
+
         .compatibility {
             font-size: 72px;
             color: #4CAF50;
             font-weight: bold;
+            margin: 20px 0;
         }
 
         .code-display {
@@ -155,6 +169,10 @@
             margin-bottom: 20px;
         }
 
+        .hidden {
+            display: none;
+        }
+
         .loader {
             border: 5px solid #f3f3f3;
             border-top: 5px solid #667eea;
@@ -170,10 +188,10 @@
             100% { transform: rotate(360deg); }
         }
 
-        .database-error {
+        .error-message {
             color: #f44336;
             background: #ffebee;
-            padding: 20px;
+            padding: 15px;
             border-radius: 10px;
             margin: 20px 0;
         }
@@ -188,10 +206,10 @@
                 <h2 style="margin-bottom: 30px; color: #333;">Quiz dla pary na dwóch urządzeniach</h2>
                 <button class="btn" id="createRoomBtn">Stwórz nowy pokój</button>
                 <p style="margin: 20px 0; color: #666;">lub</p>
-                <input type="text" id="roomCodeInput" class="room-input" placeholder="Kod pokoju" maxlength="6">
+                <input type="text" id="roomCodeInput" class="room-input" placeholder="Kod pokoju" maxlength="6" autocomplete="off">
                 <button class="btn" id="joinRoomBtn">Dołącz</button>
             </div>
-            <div id="errorMessage" style="color: #f44336; margin-top: 20px;"></div>
+            <div id="errorMessage" class="error-message" style="display: none;"></div>
         </div>
 
         <!-- Ekran oczekiwania -->
@@ -220,14 +238,14 @@
     </div>
 
     <script type="module">
-        // Import Firebase
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-        import { getDatabase, ref, set, update, onValue, once, remove, get } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
+        import { initializeApp } from "firebase/app";
+        import { getDatabase, ref, set, update, onValue, get, remove } from "firebase/database";
 
-        // TWOJA konfiguracja Firebase
+        // 🔥 TWOJA POPRAWNA KONFIGURACJA FIREBASE 🔥
         const firebaseConfig = {
             apiKey: "AIzaSyCbHpYsa13fpd_jypAB72otY0qYZDlUrk4",
             authDomain: "kto-quiz-404d9.firebaseapp.com",
+            databaseURL: "https://kto-quiz-404d9-default-rtdb.europe-west1.firebasedatabase.app/",
             projectId: "kto-quiz-404d9",
             storageBucket: "kto-quiz-404d9.firebasestorage.app",
             messagingSenderId: "472146697418",
@@ -241,10 +259,9 @@
         try {
             app = initializeApp(firebaseConfig);
             database = getDatabase(app);
-            console.log("Firebase zainicjalizowany pomyślnie!");
+            console.log("✅ Firebase połączony!");
         } catch (error) {
-            console.error("Błąd inicjalizacji Firebase:", error);
-            document.getElementById('errorMessage').innerHTML = '❌ Błąd połączenia z Firebase. Sprawdź konfigurację.';
+            console.error("❌ Błąd Firebase:", error);
         }
 
         // Pytania
@@ -269,82 +286,93 @@
         let gameActive = false;
         let unsubscribeFunctions = [];
 
-        // Funkcja do generowania kodu pokoju
+        // Generowanie kodu pokoju
         function generateRoomCode() {
             return Math.floor(100000 + Math.random() * 900000).toString();
         }
 
         // Czyszczenie nasłuchiwań
         function clearListeners() {
-            unsubscribeFunctions.forEach(unsubscribe => {
-                if (typeof unsubscribe === 'function') {
-                    unsubscribe();
-                }
-            });
+            unsubscribeFunctions.forEach(fn => fn());
             unsubscribeFunctions = [];
         }
 
-        // Tworzenie nowego pokoju
-        window.createRoom = function() {
-            const roomCode = generateRoomCode();
-            currentRoom = roomCode;
-            playerNumber = 1;
-            
-            const roomRef = ref(database, `rooms/${roomCode}`);
-            
-            set(roomRef, {
-                created: Date.now(),
-                player1: {
-                    connected: true,
-                    currentAnswer: null,
-                    ready: false
-                },
-                player2: {
-                    connected: false,
-                    currentAnswer: null,
-                    ready: false
-                },
-                gameState: {
-                    currentQuestion: 0,
-                    correctAnswers: 0,
-                    status: 'waiting'
-                }
-            }).then(() => {
+        // Tworzenie pokoju
+        window.createRoom = async function() {
+            try {
+                const roomCode = generateRoomCode();
+                currentRoom = roomCode;
+                playerNumber = 1;
+                
+                const roomRef = ref(database, `rooms/${roomCode}`);
+                
+                await set(roomRef, {
+                    created: Date.now(),
+                    player1: {
+                        connected: true,
+                        currentAnswer: null,
+                        ready: false
+                    },
+                    player2: {
+                        connected: false,
+                        currentAnswer: null,
+                        ready: false
+                    },
+                    gameState: {
+                        currentQuestion: 0,
+                        correctAnswers: 0,
+                        status: 'waiting'
+                    }
+                });
+                
                 document.getElementById('startScreen').style.display = 'none';
                 document.getElementById('waitingScreen').style.display = 'block';
                 document.getElementById('roomCode').textContent = roomCode;
                 document.getElementById('playerBadge').textContent = 'Gracz 1 (Twórca)';
                 
-                listenForPlayer2(roomCode);
-            }).catch((error) => {
+                // Nasłuchuj na gracza 2
+                const player2Ref = ref(database, `rooms/${roomCode}/player2/connected`);
+                const unsubscribe = onValue(player2Ref, (snapshot) => {
+                    if (snapshot.val() === true) {
+                        document.getElementById('waitingScreen').style.display = 'none';
+                        document.getElementById('gameScreen').style.display = 'block';
+                        document.getElementById('gamePlayerBadge').textContent = 'Gracz 1 (Twórca)';
+                        initializeGame();
+                    }
+                });
+                unsubscribeFunctions.push(unsubscribe);
+                
+            } catch (error) {
                 console.error("Błąd tworzenia pokoju:", error);
-                document.getElementById('errorMessage').innerHTML = '❌ Nie udało się utworzyć pokoju. Spróbuj ponownie.';
-            });
+                document.getElementById('errorMessage').style.display = 'block';
+                document.getElementById('errorMessage').textContent = '❌ Nie udało się utworzyć pokoju. Sprawdź połączenie.';
+            }
         };
 
-        // Dołączanie do istniejącego pokoju
-        window.joinRoom = function() {
+        // Dołączanie do pokoju
+        window.joinRoom = async function() {
             const roomCode = document.getElementById('roomCodeInput').value;
-            if (roomCode.length < 6) {
+            if (!roomCode || roomCode.length < 6) {
                 alert('Wprowadź poprawny 6-cyfrowy kod!');
                 return;
             }
             
-            currentRoom = roomCode;
-            playerNumber = 2;
-            
-            const roomRef = ref(database, `rooms/${roomCode}`);
-            
-            get(roomRef).then((snapshot) => {
+            try {
+                currentRoom = roomCode;
+                playerNumber = 2;
+                
+                const roomRef = ref(database, `rooms/${roomCode}`);
+                const snapshot = await get(roomRef);
                 const room = snapshot.val();
+                
                 if (room && !room.player2.connected) {
-                    update(ref(database, `rooms/${roomCode}/player2`), {
+                    await update(ref(database, `rooms/${roomCode}/player2`), {
                         connected: true,
                         currentAnswer: null,
                         ready: true
                     });
                     
-                    update(ref(database, `rooms/${roomCode}/gameState`), {
+                    await update(ref(database, `rooms/${roomCode}/gameState`), {
                         status: 'playing'
                     });
                     
@@ -356,28 +384,11 @@
                 } else {
                     alert('Pokój nie istnieje lub jest już zajęty!');
                 }
-            }).catch((error) => {
-                console.error("Błąd dołączania do pokoju:", error);
+            } catch (error) {
+                console.error("Błąd dołączania:", error);
                 alert('Nie udało się dołączyć do pokoju. Sprawdź kod i spróbuj ponownie.');
-            });
+            }
         };
-
-        // Nasłuchiwanie na gracza 2
-        function listenForPlayer2(roomCode) {
-            const player2Ref = ref(database, `rooms/${roomCode}/player2/connected`);
-            
-            const unsubscribe = onValue(player2Ref, (snapshot) => {
-                if (snapshot.val() === true) {
-                    document.getElementById('waitingScreen').style.display = 'none';
-                    document.getElementById('gameScreen').style.display = 'block';
-                    document.getElementById('gamePlayerBadge').textContent = 'Gracz 1 (Twórca)';
-                    
-                    initializeGame();
-                }
-            });
-            
-            unsubscribeFunctions.push(unsubscribe);
-        }
 
         // Inicjalizacja gry
         function initializeGame() {
@@ -390,12 +401,11 @@
             displayQuestion();
         }
 
-        // Nasłuchiwanie na aktualizacje gry
+        // Nasłuchiwanie aktualizacji gry
         function listenForGameUpdates() {
-            const roomRef = ref(database, `rooms/${currentRoom}`);
-            
             // Nasłuchuj na zmianę pytania
-            const questionUnsubscribe = onValue(ref(database, `rooms/${currentRoom}/gameState/currentQuestion`), (snapshot) => {
+            const questionRef = ref(database, `rooms/${currentRoom}/gameState/currentQuestion`);
+            const questionUnsubscribe = onValue(questionRef, (snapshot) => {
                 const newQuestion = snapshot.val();
                 if (newQuestion !== null && newQuestion !== currentQuestionIndex) {
                     currentQuestionIndex = newQuestion;
@@ -407,23 +417,22 @@
             
             // Nasłuchuj na odpowiedzi przeciwnika
             if (playerNumber === 1) {
-                const p2AnswerUnsubscribe = onValue(ref(database, `rooms/${currentRoom}/player2/currentAnswer`), (snapshot) => {
-                    if (snapshot.val() !== null && playerNumber === 1) {
-                        checkBothAnswers();
-                    }
+                const p2Ref = ref(database, `rooms/${currentRoom}/player2/currentAnswer`);
+                const p2Unsubscribe = onValue(p2Ref, () => {
+                    if (playerNumber === 1) checkBothAnswers();
                 });
-                unsubscribeFunctions.push(p2AnswerUnsubscribe);
+                unsubscribeFunctions.push(p2Unsubscribe);
             } else {
-                const p1AnswerUnsubscribe = onValue(ref(database, `rooms/${currentRoom}/player1/currentAnswer`), (snapshot) => {
-                    if (snapshot.val() !== null && playerNumber === 2) {
-                        checkBothAnswers();
-                    }
+                const p1Ref = ref(database, `rooms/${currentRoom}/player1/currentAnswer`);
+                const p1Unsubscribe = onValue(p1Ref, () => {
+                    if (playerNumber === 2) checkBothAnswers();
                 });
-                unsubscribeFunctions.push(p1AnswerUnsubscribe);
+                unsubscribeFunctions.push(p1Unsubscribe);
             }
             
             // Nasłuchuj na zakończenie gry
-            const statusUnsubscribe = onValue(ref(database, `rooms/${currentRoom}/gameState/status`), (snapshot) => {
+            const statusRef = ref(database, `rooms/${currentRoom}/gameState/status`);
+            const statusUnsubscribe = onValue(statusRef, (snapshot) => {
                 if (snapshot.val() === 'finished') {
                     showFinalResult();
                 }
@@ -445,8 +454,8 @@
                 <div class="question">${questions[currentQuestionIndex]}</div>
                 <p style="color: #666; margin-bottom: 10px;">Kliknij na swoją odpowiedź:</p>
                 <div class="options">
-                    <button class="option-btn" onclick="window.submitAnswer('dziewczyna')">👩</button>
-                    <button class="option-btn" onclick="window.submitAnswer('chlopak')">👨</button>
+                    <button class="option-btn" onclick="window.submitAnswer('dziewczyna', event)">👩</button>
+                    <button class="option-btn" onclick="window.submitAnswer('chlopak', event)">👨</button>
                 </div>
                 <div id="answerStatus" style="margin-top: 20px; color: #666;">
                     ⏳ Wybierz odpowiedź...
@@ -458,78 +467,88 @@
         }
 
         // Wysyłanie odpowiedzi
-        window.submitAnswer = function(answer) {
+        window.submitAnswer = async function(answer, event) {
             if (hasAnswered || !gameActive) return;
             
             hasAnswered = true;
             
             const buttons = document.querySelectorAll('.option-btn');
-            buttons.forEach(btn => {
-                btn.classList.remove('selected');
-            });
+            buttons.forEach(btn => btn.classList.remove('selected'));
             event.target.classList.add('selected');
             
-            const playerRef = ref(database, `rooms/${currentRoom}/player${playerNumber}`);
-            update(playerRef, {
-                currentAnswer: answer,
-                ready: true
-            });
-            
-            document.getElementById('answerStatus').innerHTML = '✅ Odpowiedź zapisana! Czekam na drugiego gracza...';
+            try {
+                const playerRef = ref(database, `rooms/${currentRoom}/player${playerNumber}`);
+                await update(playerRef, {
+                    currentAnswer: answer,
+                    ready: true
+                });
+                
+                document.getElementById('answerStatus').innerHTML = '✅ Odpowiedź zapisana! Czekam na drugiego gracza...';
+            } catch (error) {
+                console.error("Błąd zapisu odpowiedzi:", error);
+                hasAnswered = false;
+            }
         };
 
         // Sprawdzanie odpowiedzi obu graczy
-        function checkBothAnswers() {
-            const roomRef = ref(database, `rooms/${currentRoom}`);
-            
-            get(roomRef).then((snapshot) => {
+        async function checkBothAnswers() {
+            try {
+                const roomRef = ref(database, `rooms/${currentRoom}`);
+                const snapshot = await get(roomRef);
                 const room = snapshot.val();
+                
+                if (!room) return;
+                
                 const p1Answer = room.player1?.currentAnswer;
                 const p2Answer = room.player2?.currentAnswer;
                 
                 if (p1Answer && p2Answer) {
-                    const sameAnswer = (p1Answer === p2Answer);
+                    const sameAnswer = p1Answer === p2Answer;
                     
                     if (sameAnswer) {
                         const newScore = (room.gameState.correctAnswers || 0) + 1;
-                        update(ref(database, `rooms/${currentRoom}/gameState`), {
+                        await update(ref(database, `rooms/${currentRoom}/gameState`), {
                             correctAnswers: newScore
                         });
                     }
                     
-                    update(ref(database, `rooms/${currentRoom}/player1`), {
-                        currentAnswer: null
-                    });
+                    // Wyczyść odpowiedzi
+                    await update(ref(database, `rooms/${currentRoom}/player1`), { currentAnswer: null });
+                    await update(ref(database, `rooms/${currentRoom}/player2`), { currentAnswer: null });
                     
-                    update(ref(database, `rooms/${currentRoom}/player2`), {
-                        currentAnswer: null
-                    });
-                    
+                    // Następne pytanie
                     const nextQuestion = currentQuestionIndex + 1;
                     if (nextQuestion < questions.length) {
-                        update(ref(database, `rooms/${currentRoom}/gameState`), {
+                        await update(ref(database, `rooms/${currentRoom}/gameState`), {
                             currentQuestion: nextQuestion
                         });
                     } else {
                         endGame();
                     }
                 }
-            });
+            } catch (error) {
+                console.error("Błąd sprawdzania odpowiedzi:", error);
+            }
         }
 
         // Zakończenie gry
-        function endGame() {
+        async function endGame() {
             gameActive = false;
-            update(ref(database, `rooms/${currentRoom}/gameState`), {
-                status: 'finished'
-            });
+            try {
+                await update(ref(database, `rooms/${currentRoom}/gameState`), {
+                    status: 'finished'
+                });
+            } catch (error) {
+                console.error("Błąd kończenia gry:", error);
+            }
         }
 
         // Wyświetlanie wyniku końcowego
-        function showFinalResult() {
-            get(ref(database, `rooms/${currentRoom}/gameState`)).then((snapshot) => {
+        async function showFinalResult() {
+            try {
+                const snapshot = await get(ref(database, `rooms/${currentRoom}/gameState`));
                 const gameState = snapshot.val();
-                const correctAnswers = gameState.correctAnswers || 0;
+                const correctAnswers = gameState?.correctAnswers || 0;
                 const compatibility = Math.round((correctAnswers / questions.length) * 100);
                 
                 let message = '';
@@ -541,8 +560,7 @@
                 document.getElementById('gameScreen').style.display = 'none';
                 document.getElementById('finalResultScreen').style.display = 'block';
                 
-                const content = document.getElementById('finalResultContent');
-                content.innerHTML = `
+                document.getElementById('finalResultContent').innerHTML = `
                     <h2 style="font-size: 48px; margin-bottom: 20px; color: #333;">Wasz wynik!</h2>
                     <div class="compatibility">${compatibility}%</div>
                     <p style="font-size: 24px; margin-bottom: 30px; color: #666;">${message}</p>
@@ -551,22 +569,25 @@
                     </div>
                     <button class="btn" onclick="window.location.reload()">Zagraj ponownie</button>
                 `;
-            });
+            } catch (error) {
+                console.error("Błąd wyświetlania wyniku:", error);
+            }
         }
 
-        // Anulowanie tworzenia pokoju
-        window.cancelRoom = function() {
+        // Anulowanie
+        window.cancelRoom = async function() {
             if (currentRoom) {
-                remove(ref(database, `rooms/${currentRoom}`)).then(() => {
-                    window.location.reload();
-                });
-            } else {
-                window.location.reload();
+                try {
+                    await remove(ref(database, `rooms/${currentRoom}`));
+                } catch (error) {
+                    console.error("Błąd usuwania pokoju:", error);
+                }
             }
+            window.location.reload();
         };
 
-        // Inicjalizacja - przypisanie event listenerów po załadowaniu strony
-        document.addEventListener('DOMContentLoaded', function() {
+        // Inicjalizacja event listenerów
+        document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('createRoomBtn').onclick = window.createRoom;
             document.getElementById('joinRoomBtn').onclick = window.joinRoom;
             document.getElementById('cancelRoomBtn').onclick = window.cancelRoom;
